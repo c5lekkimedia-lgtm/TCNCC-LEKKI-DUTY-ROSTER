@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// Security rules for the TCNCC Lekki Temple Duty Roster.
+//
+// This app has NO LOGIN — anyone with the page's link can sign up, and
+// anyone who guesses (or is shown) the admin PIN can manage it. These
+// rules only make sure that WRITES look like valid roster data; they do
+// not hide data from anyone, since there is no authentication in this
+// simple setup. See the "Security, honestly" section of README.md.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // The current month/year and which Sundays are open for sign-up.
+    match /config/roster {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasAll(['month', 'year', 'sundays'])
+                   && request.resource.data.month is string
+                   && request.resource.data.year is string
+                   && request.resource.data.sundays is list;
+    }
+
+    // The admin PIN. Readable by the page itself to check unlock attempts —
+    // this means it is NOT a real secret (see README). Treat it as a
+    // "keep honest people honest" deterrent, not real security.
+    match /config/admin_pin {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasOnly(['pin'])
+                   && request.resource.data.pin is string
+                   && request.resource.data.pin.size() <= 20;
+    }
+
+    // One document per volunteer sign-up, keyed by a slug of their name.
+    match /submissions/{submissionId} {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasAll(['title', 'name', 'slots', 'month', 'year', 'savedAt'])
+                   && request.resource.data.name is string
+                   && request.resource.data.name.size() > 0
+                   && request.resource.data.name.size() < 100
+                   && request.resource.data.slots is list
+                   && request.resource.data.slots.size() < 200;
+      allow delete: if true;
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
